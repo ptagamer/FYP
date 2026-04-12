@@ -12,13 +12,12 @@ from processors import BehavioralDataProcessor
 # The "Golden Hash" for Appendix D 
 EXPECTED_HASH = "11005ff6f5007bfee7d60bd0dc2e787f4e77b46f3b0a3d09424421c5339a8406"
 
-def run_nebula_pipeline():
+def run_nebula_pipeline(file_name):
     """
     Acts as the Task Controller to coordinate data ingestion, 
-    integrity verification, and model training[cite: 465, 646].
-    """
-    file_name = 'dynamic_api_call_sequence_per_malware_100_0_306.csv'
-    
+    integrity verification, and model training.
+    """  
+
     # 1. INITIALIZE DATA LAYER
     processor = BehavioralDataProcessor(expected_hash=EXPECTED_HASH)
     
@@ -81,9 +80,13 @@ def run_nebula_pipeline():
     print("\nModel saved successfully as 'nebula_rf_model.pkl'")
 
 if __name__ == "__main__":
-    run_nebula_pipeline()
+    # Default file used ONLY when running main.py directly for testing
+    TEST_FILE = 'dynamic_api_call_sequence_per_malware_100_0_306.csv'
+    
+    # Now we pass the file name into the function to avoid the TypeError
+    run_nebula_pipeline(TEST_FILE)
 
-    # Final Verification check
+    # Final Verification check (Remains the same)
     if os.path.exists('nebula_rf_model.pkl'):
         print("\nSUCCESS: Serialized model 'nebula_rf_model.pkl' found and verified.")
         loaded_model = joblib.load('nebula_rf_model.pkl')
