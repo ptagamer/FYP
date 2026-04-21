@@ -9,7 +9,7 @@ from sklearn.metrics import classification_report
 # Import the modular logic from new file
 from processors import BehavioralDataProcessor
 
-# The "Golden Hash" for Appendix D 
+# The "Golden Hash" 
 EXPECTED_HASH = "11005ff6f5007bfee7d60bd0dc2e787f4e77b46f3b0a3d09424421c5339a8406"
 
 def run_nebula_pipeline(file_name):
@@ -42,7 +42,7 @@ def run_nebula_pipeline(file_name):
     print("SUCCESS: Data normalized and ready for the Intelligence Layer.")
 
     # 5. DATA BALANCING (Addressing Class Imbalance) 
-    # This addresses the 0.51 recall issue found in Section 6.3 
+    # Addressing the 0.51 recall issue
     X_balanced, y_balanced = processor.balance_data(X_normalized, y)
 
     # 6. UPDATED SPLIT (Using Balanced Data)
