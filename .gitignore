@@ -1,0 +1,10 @@
+# Ignore the massive raw data
+avast_data/
+*.jsonl
+
+# Ignore the processed CSVs (optional, but keeps GitHub clean)
+avast_blind_test.csv
+
+# Ignore Python cache
+__pycache__/
+.venv/
