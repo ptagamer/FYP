@@ -81,28 +81,19 @@ def train_nebula_model(file_name):
 
 def run_nebula_pipeline(file_path):
     """
-    DETECTION PHASE: Called by gui.py to predict a new behavioral log.
-    Fulfills Requirements F5 (Verdict) and F6 (Confidence Score).
+    DETECTION PHASE: Predicts malware and provides Human-Readable Local XAI.
     """
-    # Add this line to see it in the terminal
-    print(f"\n--- [GUI REQUEST] Analyzing: {file_path} ---") 
-    
     df = pd.read_csv(file_path)
     X_new = df.drop(['hash', 'malware'], axis=1, errors='ignore')
 
     extractor = MalwareFeatureExtractor()
     refined_features = extractor.isolate_api_sequences(X_new)
     
-    # Add this line to see feature isolation
-    print(f"Isolated {len(refined_features.columns)} critical API features...") 
-
-    # Load the trained model
     try:
         model = joblib.load(MODEL_FILE) 
     except FileNotFoundError:
-        raise Exception(f"Model file '{MODEL_FILE}' not found! Please run main.py to train the model first.")
+        raise Exception(f"Model file '{MODEL_FILE}' not found! Train the model first.")
 
-    # Safeguard: Align the columns so sklearn doesn't crash if the new file is missing a column
     refined_features = refined_features.reindex(columns=model.feature_names_in_, fill_value=0)
 
     prediction = model.predict(refined_features)
@@ -111,10 +102,30 @@ def run_nebula_pipeline(file_path):
     confidence = max(probabilities[0]) * 100 
     verdict = "Malicious" if prediction[0] == 1 else "Benign"
     
-    # Add this line to see the result in terminal too
-    print(f"Result: {verdict} ({confidence:.2f}%)") 
+    # --- UPDATED LOCAL XAI LOGIC (Human-Readable Translation) ---
     
-    return verdict, confidence
+    # Dictionary translating raw dataset columns into plain English for the Analyst
+    feature_descriptions = {
+        't_1': "Suspicious API calls clustered in the initial launch phase (0-2 seconds).",
+        't_2': "Anomalous execution behavior during the secondary loading phase (2-5 seconds).",
+        'RegSetValue': "Detected attempt to modify the Windows Registry (Likely Persistence).",
+        'NtCreateProcess': "Detected attempt to spawn a hidden process (Likely Injection).",
+        'ConnectEx': "Detected unprompted outbound network connection (Likely C2 Beaconing).",
+        'NtWriteVirtualMemory': "Detected code injection into another running process.",
+        'CreateRemoteThread': "Detected attempt to execute payload in a remote thread."
+    }
+
+    if verdict == "Malicious":
+        # Find the specific feature that triggered the alarm
+        top_feature = refined_features.iloc[0].idxmax()
+        
+        # Translate it using the dictionary. If it's a new API not in the list, just show the name.
+        human_readable = feature_descriptions.get(top_feature, f"Anomalous usage of API: {top_feature}")
+        reason = human_readable
+    else:
+        reason = "Normal execution flow. No red flags found."
+        
+    return verdict, confidence, reason
 
 
 if __name__ == "__main__":

@@ -1,5 +1,7 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
+from PIL import Image, ImageTk
+import os
 import sqlite3
 
 # --- THE BRIDGES (Imports) ---
@@ -86,33 +88,32 @@ class NebulaGUI:
             messagebox.showwarning("Warning", "Please select a dataset first!")
             return
         try:
-            # 1. Log the action to the SQL Audit Trail (F7)
             self.auth.log_action(self.username, f"Ran analysis on {self.selected_file.split('/')[-1]}")
             
-            # 2. Run the detection pipeline (F5, F6)
-            verdict, confidence = run_nebula_pipeline(self.selected_file)
+            # Catch the NEW 'reason' variable from main.py
+            verdict, confidence, reason = run_nebula_pipeline(self.selected_file)
             
-            # 3. Update UI with Color-Coding (NF3)
             res_color = "red" if verdict == "Malicious" else "green"
-            result_text = f"Verdict: {verdict}\nConfidence: {confidence:.2f}%"
+            
+            # Update UI to include the XAI Reason
+            result_text = f"Verdict: {verdict}\nConfidence: {confidence:.2f}%\nKey Indicator: {reason}"
             
             self.file_label.config(text=result_text, fg=res_color, font=("Arial", 12, "bold"))
-            
             messagebox.showinfo("Analysis Complete", result_text)
             
         except Exception as e:
             messagebox.showerror("Error", f"Analysis failed: {e}")
 
     def view_logs(self):
-        """Displays the forensic audit trail (Admin only)."""
+        """Displays forensic logs AND the Global XAI Chart (Admin only)."""
         log_win = tk.Toplevel(self.root)
-        log_win.title("System Audit Logs")
-        center_window(log_win, 450, 350)
+        log_win.title("System Audit Logs & Analytics")
+        center_window(log_win, 550, 600) # Made the window taller to fit the chart
         
-        tk.Label(log_win, text="Forensic Audit Trail", font=("Arial", 12, "bold")).pack(pady=10)
+        tk.Label(log_win, text="Forensic Audit Trail", font=("Arial", 12, "bold")).pack(pady=5)
         
-        text_area = tk.Text(log_win, height=15, width=50)
-        text_area.pack(padx=10, pady=10)
+        text_area = tk.Text(log_win, height=10, width=60)
+        text_area.pack(padx=10, pady=5)
         
         with sqlite3.connect("nebula_security.db") as conn:
             cursor = conn.cursor()
@@ -120,8 +121,20 @@ class NebulaGUI:
             logs = cursor.fetchall()
             for log in logs:
                 text_area.insert(tk.END, f"[{log[3]}] {log[1]}: {log[2]}\n")
+        text_area.config(state=tk.DISABLED) 
+
+        # --- NEW VISUAL XAI LOGIC (Admin Analytics) ---
+        tk.Label(log_win, text="Global XAI: Feature Importance", font=("Arial", 12, "bold")).pack(pady=10)
         
-        text_area.config(state=tk.DISABLED) # Make it read-only
+        if os.path.exists("nebula_feature_importance.png"):
+            # Load and resize the chart to fit nicely in the window
+            img = Image.open("nebula_feature_importance.png")
+            img = img.resize((450, 250), Image.Resampling.LANCZOS)
+            self.chart_img = ImageTk.PhotoImage(img) # Must save as self.chart_img so it doesn't get garbage collected
+            
+            tk.Label(log_win, image=self.chart_img).pack()
+        else:
+            tk.Label(log_win, text="[Chart not found. Run main.py to train the model.]", fg="red").pack()
 
 def open_dashboard(username, role):
     main_root = tk.Tk()
