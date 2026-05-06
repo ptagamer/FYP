@@ -125,6 +125,17 @@ class NebulaGUI:
 
         # --- NEW VISUAL XAI LOGIC (Admin Analytics) ---
         tk.Label(log_win, text="Global XAI: Feature Importance", font=("Arial", 12, "bold")).pack(pady=10)
+        tk.Label(
+            log_win,
+            text=(
+                "This chart shows which behavioral features the model relies on most overall. "
+                "Longer bars mean the model used that feature more when making decisions across the training data. "
+                "It is a global explanation, not a per-file reason."
+            ),
+            wraplength=500,
+            justify="left",
+            fg="gray30"
+        ).pack(padx=10, pady=(0, 10))
         
         if os.path.exists("nebula_feature_importance.png"):
             # Load and resize the chart to fit nicely in the window
