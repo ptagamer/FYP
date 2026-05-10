@@ -7,6 +7,8 @@ import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report
 from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test_split
+from imblearn.pipeline import Pipeline as ImbPipeline
+from imblearn.over_sampling import SMOTE
 
 # --- Configuration ---
 MODEL_FILE = 'nebula_rf_model.pkl'
@@ -14,12 +16,61 @@ MODEL_FILE = 'nebula_rf_model.pkl'
 DATASET_FILE = 'dynamic_api_call_sequence_per_malware_100_0_306.csv' 
 
 
-FEATURE_DESCRIPTIONS = {
-    't_0': "Suspicious activity detected at the entry point.",
-    't_1': "Suspicious API calls clustered in the initial launch phase.",
-    't_2': "Anomalous execution behavior during the secondary loading phase.",
-}
+def describe_api_call(api_name):
+    api = api_name.lower()
 
+    if api in {
+        'createremotethread', 'createremotethreadex', 'ntcreatethreadex',
+        'rtlcreateuserthread', 'ntqueueapcthread', 'ntsetcontextthread',
+        'ntgetcontextthread', 'writeprocessmemory', 'readprocessmemory',
+        'ntwritevirtualmemory', 'ntreadvirtualmemory'
+    }:
+        return 'Manipulates processes or threads; often used for injection or hijacking.'
+
+    if api in {'openprocess', 'openthread', 'ntopenprocess', 'ntopenthread', 'ntduplicateobject'}:
+        return 'Opens sensitive handles; malware uses it before tampering or injection.'
+
+    if api in {'process32firstw', 'process32nextw', 'thread32first', 'thread32next', 'module32firstw', 'module32nextw', 'createtoolhelp32snapshot'}:
+        return 'Enumerates processes or modules; malware uses it for victim reconnaissance.'
+
+    if api.startswith('reg') or any(token in api for token in ('openkey', 'createkey', 'deletekey', 'deletevalue', 'setvalue', 'querykey', 'queryvalue', 'enumvalue', 'enumkey', 'loadkey', 'unloadkey')):
+        if any(token in api for token in ('query', 'enum', 'close')):
+            return 'Reads registry data; malware uses it to locate defenses or persistence.'
+        return 'Modifies registry settings; malware uses it for persistence or evasion.'
+
+    if api.startswith('internet') or api.startswith('http') or api in {
+        'connect', 'socket', 'bind', 'listen', 'accept', 'send', 'recv', 'sendto',
+        'recvfrom', 'shutdown', 'getsockname', 'setsockopt', 'ioctlsocket', 'wsastartup',
+        'wsasocketa', 'wsasocketw', 'wsaconnect', 'wsasend', 'wsarecv', 'wsasendto',
+        'wsarecvfrom', 'dnsquery_a', 'getaddrinfo', 'gethostbyname'
+    }:
+        return 'Opens network connections; malware uses it for command-and-control or exfiltration.'
+
+    if 'service' in api or 'scmanager' in api:
+        return 'Controls services; malware uses it for persistence and defense evasion.'
+
+    if 'crypt' in api or api in {'decryptmessage', 'encryptmessage', 'protectmemory', 'unprotectmemory'}:
+        return 'Encrypts or decrypts data; malware uses it for ransomware or concealment.'
+
+    if api in {'isdebuggerpresent', 'setunhandledexceptionfilter', 'outputdebugstringa', 'outputdebugstringw', 'findwindowa', 'findwindoww', 'findwindowexa', 'findwindowexw'}:
+        return 'Inspects debugging or window state; malware uses it to detect analysis.'
+
+    if api in {'getasynckeystate', 'getkeyboardstate', 'getkeystate'}:
+        return 'Reads input state; malware may use it for keylogging or surveillance.'
+
+    if api in {'getsystemmetrics', 'getsysteminfo', 'getnativesysteminfo', 'getcomputernamea', 'getcomputernamew', 'getusernamea', 'getusernamew', 'getusernameexa', 'getusernameexw', 'globalmemorystatusex', 'globalmemorystatus', 'getdiskfreespacew', 'getdiskfreespaceexw', 'getdiskfreespaceex', 'getfileattributesw', 'getfileattributesexw', 'getfileversioninfow', 'getfileversioninfosizew', 'getfileversioninfoexw', 'getfileinformationbyhandle', 'getfileinformationbyhandleex', 'getfiletype', 'getvolumenameforvolumemountpointw', 'getvolumepathnamew', 'getvolumepathnamesforvolumenamew', 'gettimezoneinformation', 'getadaptersinfo', 'getadaptersaddresses', 'netusergetinfo', 'netusergetlocalgroups', 'netgetjoininformation', 'getbestinterfaceex'}:
+        return 'Queries system details; malware uses it to profile victims before acting.'
+
+    if api in {'copyfilea', 'copyfilew', 'copyfileexw', 'movefilewithprogressw', 'deletefilew', 'removedirectorya', 'removedirectoryw', 'createdirectoryw', 'createdirectoryexw', 'setfileinformationbyhandle', 'setfilepointer', 'setfilepointerex', 'setfiletime', 'setendoffile', 'ntopenfile', 'ntcreatefile', 'ntreadfile', 'ntwritefile', 'ntdeletefile', 'ntsetinformationfile', 'ntqueryinformationfile', 'ntqueryattributesfile', 'ntqueryfullattributesfile', 'ntquerydirectoryfile', 'ntdeviceiocontrolfile', 'searchpathw', 'loadresource', 'sizeresource', 'findresourcea', 'findresourceexa', 'findresourceexw', 'findresourcew', 'readcabinetstate', 'getfilesize', 'getfilesizeex', 'getfileattributesexw', 'getshortpathnamew', 'gettemppathw', 'getfileinformationbyhandle', 'getfileinformationbyhandleex'}:
+        return 'Reads or writes files; malware uses it to drop or hide payloads.'
+
+    if api in {'coinitializeex', 'coinitializesecurity', 'couninitialize', 'cocreateinstance', 'cocreateinstanceex', 'cogetclassobject', 'oleinitialize', 'iwbemservices_execquery', 'iwbemservices_execmethod', 'shgetfolderpathw', 'shgetspecialfolderlocation', 'certopenstore', 'certopenssystemstorea', 'certopensystemstorew', 'certopensystemstorea', 'certcontrolstore', 'certcreatcertificatecontext'}:
+        return 'Uses COM, WMI, or certificates; malware abuses it for automation or trust.'
+
+    if api.startswith('nt'):
+        return 'Uses low-level NT services; malware often abuses them to evade detections.'
+
+    return f'Calls {api_name}; malware may abuse it for execution, persistence, or stealth.'
 
 def engineer_sequence_features(df):
     """Create compact behavioral summaries from the raw API sequence columns."""
@@ -98,11 +149,14 @@ def train_nebula_model(data_path):
         class_weight='balanced_subsample',
     )
 
-    # Cross-validation is run only on the training split, with class weighting
-    # to reduce bias toward the dominant malware class.
-    print("\n[SCIENTIFIC VALIDATION] Starting 5-Fold Cross-Validation on training data...")
+    # Build an imbalanced-learn pipeline that applies SMOTE only during training
+    smote = SMOTE(random_state=42)
+    smote_pipeline = ImbPipeline([('smote', smote), ('clf', model)])
+
+    # Cross-validation is run only on the training split; SMOTE will be applied inside each fold
+    print("\n[SCIENTIFIC VALIDATION] Starting 5-Fold Cross-Validation on training data with SMOTE in-fold...")
     cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-    scores = cross_val_score(model, X_train, y_train, cv=cv, scoring='balanced_accuracy')
+    scores = cross_val_score(smote_pipeline, X_train, y_train, cv=cv, scoring='balanced_accuracy')
 
     print("=" * 45)
     print("CROSS-VALIDATION RESULTS (K=5)")
@@ -110,14 +164,15 @@ def train_nebula_model(data_path):
     print(f"Standard Deviation: {np.std(scores) * 100:.2f}%")
     print("=" * 45)
 
-    print("\nTraining final production model on the full training split...")
-    model.fit(X_train, y_train)
+    print("\nTraining final production model on the full training split (SMOTE applied during fit)...")
+    smote_pipeline.fit(X_train, y_train)
 
-    test_predictions = model.predict(X_test)
+    test_predictions = smote_pipeline.predict(X_test)
     print("\n--- Nebula Detection Performance on Held-Out Test Set ---")
     print(classification_report(y_test, test_predictions))
 
-    importances = model.feature_importances_
+    # Extract feature importances from the final trained classifier inside the pipeline
+    importances = smote_pipeline.named_steps['clf'].feature_importances_
     feature_names = X_train.columns
     feature_importance_df = pd.DataFrame({'Feature': feature_names, 'Importance': importances})
     feature_importance_df = feature_importance_df.sort_values(by='Importance', ascending=False).head(10)
@@ -133,7 +188,7 @@ def train_nebula_model(data_path):
 
     joblib.dump(
         {
-            'pipeline': model,
+            'pipeline': smote_pipeline,
             'feature_names': list(X_train.columns),
         },
         MODEL_FILE,
@@ -173,9 +228,11 @@ def run_nebula_pipeline(file_path):
     verdict = "Malicious" if prediction[0] == 1 else "Benign"
 
     if verdict == "Malicious":
-        # Identify the column that influenced the decision most for this specific row
-        top_feature = X_new.iloc[0].idxmax()
-        reason = FEATURE_DESCRIPTIONS.get(top_feature, f"High-risk behavioral pattern at: {top_feature}")
+        # Use the trained Random Forest's learned feature importance ranking for the explanation.
+        feature_importances = pipeline.named_steps['clf'].feature_importances_
+        top_feature_index = int(np.argmax(feature_importances))
+        top_feature = X_new.columns[top_feature_index]
+        reason = describe_api_call(top_feature)
     else:
         reason = "Normal execution flow. No red flags found."
         
