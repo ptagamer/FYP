@@ -202,6 +202,8 @@ def run_nebula_pipeline(file_path):
     DETECTION PHASE: Used by gui.py to analyze files with Human-Readable Local XAI.
     """
     df = pd.read_csv(file_path)
+    if len(df) > 1:
+        print(f"Warning: {len(df)} rows detected, analyzing first sample only.")
 
     # Ensure we don't try to drop columns that aren't there.
     X_new = df.drop(['hash', 'malware'], axis=1, errors='ignore')
