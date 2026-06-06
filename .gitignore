@@ -1,10 +1,18 @@
-# Ignore the massive raw data
+# Virtual Environment
+.venv/
+
+# Python Cache
+__pycache__/
+*.pyc
+
+# Large Datasets
 avast_data/
 *.jsonl
-
-# Ignore the processed CSVs (optional, but keeps GitHub clean)
 avast_blind_test.csv
+dynamic_api_call_sequence_per_malware_100_0_306.csv
 
-# Ignore Python cache
-__pycache__/
-.venv/
+# Databases
+nebula_security.db
+
+# Machine Learning Models
+*.pkl

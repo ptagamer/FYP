@@ -47,7 +47,7 @@ def convert_avast_to_nebula(limit=100):
     df = pd.DataFrame(extracted_data)
     df.to_csv(OUTPUT_CSV, index=False)
     print(f"\nSUCCESS! Created '{OUTPUT_CSV}' with {len(df)} blind test samples.")
-    print("You can now select this file in your Nebula GUI!")
+    print("You can now select this file in your GUI!")
 
 if __name__ == "__main__":
     convert_avast_to_nebula()

@@ -5,13 +5,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.svm import SVC
+from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import classification_report
 from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test_split
 from imblearn.pipeline import Pipeline as ImbPipeline
 from imblearn.over_sampling import SMOTE
 
 # --- Configuration ---
-MODEL_FILE = 'nebula_rf_model.pkl'
+MODEL_FILE = 'behavioral_rf_model.pkl'
 # This is your original training dataset
 DATASET_FILE = 'dynamic_api_call_sequence_per_malware_100_0_306.csv' 
 
@@ -105,7 +107,7 @@ def _class_distribution(values):
     unique, counts = np.unique(values, return_counts=True)
     return dict(zip(unique.tolist(), counts.tolist()))
 
-def train_nebula_model(data_path):
+def train_detection_model(data_path):
     """
     TRAINING PHASE: Splits off an untouched test set, performs cross-validation
     on the training data, applies SMOTE inside each fold, and saves the model
@@ -143,61 +145,90 @@ def train_nebula_model(data_path):
     print(f"[DATA ENGINEERING] Training split distribution: {_class_distribution(y_train)}")
     print(f"[DATA ENGINEERING] Test split distribution: {_class_distribution(y_test)}")
 
-    model = RandomForestClassifier(
+    rf_model = RandomForestClassifier(
         n_estimators=100,
         random_state=42,
         class_weight='balanced_subsample',
     )
+    
+    svm_model = SVC(
+        kernel='linear',
+        max_iter=5000,
+        probability=True,
+        random_state=42,
+        class_weight='balanced'
+    )
 
     # Build an imbalanced-learn pipeline that applies SMOTE only during training
     smote = SMOTE(random_state=42)
-    smote_pipeline = ImbPipeline([('smote', smote), ('clf', model)])
+    rf_pipeline = ImbPipeline([('smote', SMOTE(random_state=42)), ('clf', rf_model)])
+    svm_pipeline = ImbPipeline([('smote', SMOTE(random_state=42)), ('scaler', StandardScaler()), ('clf', svm_model)])
 
     # Cross-validation is run only on the training split; SMOTE will be applied inside each fold
     print("\n[SCIENTIFIC VALIDATION] Starting 5-Fold Cross-Validation on training data with SMOTE in-fold...")
     cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-    scores = cross_val_score(smote_pipeline, X_train, y_train, cv=cv, scoring='balanced_accuracy')
+    
+    rf_scores = cross_val_score(rf_pipeline, X_train, y_train, cv=cv, scoring='balanced_accuracy')
+    svm_scores = cross_val_score(svm_pipeline, X_train, y_train, cv=cv, scoring='balanced_accuracy')
 
-    print("=" * 45)
-    print("CROSS-VALIDATION RESULTS (K=5)")
-    print(f"Mean Balanced Accuracy: {np.mean(scores) * 100:.2f}%")
-    print(f"Standard Deviation: {np.std(scores) * 100:.2f}%")
-    print("=" * 45)
+    rf_mean_acc = np.mean(rf_scores)
+    svm_mean_acc = np.mean(svm_scores)
 
-    print("\nTraining final production model on the full training split (SMOTE applied during fit)...")
-    smote_pipeline.fit(X_train, y_train)
+    print("=" * 60)
+    print("CROSS-VALIDATION RESULTS (K=5) - Balanced Accuracy")
+    print(f"Random Forest : Mean: {rf_mean_acc * 100:.2f}% | Std: {np.std(rf_scores) * 100:.2f}%")
+    print(f"SVM           : Mean: {svm_mean_acc * 100:.2f}% | Std: {np.std(svm_scores) * 100:.2f}%")
+    print("=" * 60)
 
-    test_predictions = smote_pipeline.predict(X_test)
-    print("\n--- Nebula Detection Performance on Held-Out Test Set ---")
-    print(classification_report(y_test, test_predictions))
+    print("\nTraining final production models on the full training split (SMOTE applied during fit)...")
+    rf_pipeline.fit(X_train, y_train)
+    svm_pipeline.fit(X_train, y_train)
 
-    # Extract feature importances from the final trained classifier inside the pipeline
-    importances = smote_pipeline.named_steps['clf'].feature_importances_
-    feature_names = X_train.columns
-    feature_importance_df = pd.DataFrame({'Feature': feature_names, 'Importance': importances})
-    feature_importance_df = feature_importance_df.sort_values(by='Importance', ascending=False).head(10)
+    rf_test_predictions = rf_pipeline.predict(X_test)
+    svm_test_predictions = svm_pipeline.predict(X_test)
+    
+    print("\n--- Behavioral Detection Performance on Held-Out Test Set ---")
+    print("[Random Forest Classification Report]")
+    print(classification_report(y_test, rf_test_predictions))
+    print("\n[SVM Classification Report]")
+    print(classification_report(y_test, svm_test_predictions))
 
-    plt.figure(figsize=(10, 6))
-    plt.barh(feature_importance_df['Feature'], feature_importance_df['Importance'], color='#008080')
-    plt.xlabel('Importance Score')
-    plt.ylabel('API Sequence Position')
-    plt.title('Top 10 Behavioral Indicators (Global XAI)')
-    plt.gca().invert_yaxis()
-    plt.tight_layout()
-    plt.savefig('nebula_feature_importance.png')
+    if rf_mean_acc >= svm_mean_acc:
+        print("\n=> Random Forest performed best. Saving Random Forest model...")
+        best_pipeline = rf_pipeline
+    else:
+        print("\n=> SVM performed best. Saving SVM model...")
+        best_pipeline = svm_pipeline
+
+    # Extract feature importances only if the best model supports it
+    clf = best_pipeline.named_steps['clf']
+    if hasattr(clf, 'feature_importances_'):
+        importances = clf.feature_importances_
+        feature_names = X_train.columns
+        feature_importance_df = pd.DataFrame({'Feature': feature_names, 'Importance': importances})
+        feature_importance_df = feature_importance_df.sort_values(by='Importance', ascending=False).head(10)
+
+        plt.figure(figsize=(10, 6))
+        plt.barh(feature_importance_df['Feature'], feature_importance_df['Importance'], color='#008080')
+        plt.xlabel('Importance Score')
+        plt.ylabel('API Sequence Position')
+        plt.title('Top 10 Behavioral Indicators (Global XAI)')
+        plt.gca().invert_yaxis()
+        plt.tight_layout()
+        plt.savefig('behavioral_feature_importance.png')
+        print("Global XAI chart saved as 'behavioral_feature_importance.png'")
 
     joblib.dump(
         {
-            'pipeline': smote_pipeline,
+            'pipeline': best_pipeline,
             'feature_names': list(X_train.columns),
         },
         MODEL_FILE,
     )
 
-    print(f"Model saved as '{MODEL_FILE}'")
-    print("Global XAI chart saved as 'nebula_feature_importance.png'")
+    print(f"Best model saved as '{MODEL_FILE}'")
 
-def run_nebula_pipeline(file_path):
+def run_detection_pipeline(file_path):
     """
     DETECTION PHASE: Used by gui.py to analyze files with Human-Readable Local XAI.
     """
@@ -230,11 +261,15 @@ def run_nebula_pipeline(file_path):
     verdict = "Malicious" if prediction[0] == 1 else "Benign"
 
     if verdict == "Malicious":
-        # Use the trained Random Forest's learned feature importance ranking for the explanation.
-        feature_importances = pipeline.named_steps['clf'].feature_importances_
-        top_feature_index = int(np.argmax(feature_importances))
-        top_feature = X_new.columns[top_feature_index]
-        reason = describe_api_call(top_feature)
+        clf = pipeline.named_steps['clf']
+        if hasattr(clf, 'feature_importances_'):
+            # Use the trained Random Forest's learned feature importance ranking for the explanation.
+            feature_importances = clf.feature_importances_
+            top_feature_index = int(np.argmax(feature_importances))
+            top_feature = X_new.columns[top_feature_index]
+            reason = describe_api_call(top_feature)
+        else:
+            reason = "Malicious behavior detected by the Support Vector Machine."
     else:
         reason = "Normal execution flow. No red flags found."
         
@@ -242,4 +277,4 @@ def run_nebula_pipeline(file_path):
 
 if __name__ == "__main__":
     # Running this script directly starts the comprehensive training & validation process
-    train_nebula_model(DATASET_FILE)
+    train_detection_model(DATASET_FILE)

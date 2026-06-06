@@ -6,7 +6,7 @@ import sqlite3
 
 # --- THE BRIDGES (Imports) ---
 from auth import Authenticator       # SQL Security Logic
-from main import run_nebula_pipeline  # Detection Engine Logic
+from main import run_detection_pipeline  # Detection Engine Logic
 
 def center_window(window, width, height):
     window.update_idletasks()
@@ -19,11 +19,11 @@ def center_window(window, width, height):
 class LoginWindow:
     def __init__(self, root):
         self.root = root
-        self.root.title("Nebula Security Portal")
+        self.root.title("Behavioral Security Portal")
         center_window(self.root, 350, 250)
         self.auth = Authenticator() 
 
-        tk.Label(self.root, text="Nebula Login", font=("Arial", 14, "bold")).pack(pady=10)
+        tk.Label(self.root, text="System Login", font=("Arial", 14, "bold")).pack(pady=10)
         
         tk.Label(self.root, text="Username:").pack()
         self.user_entry = tk.Entry(self.root)
@@ -49,17 +49,17 @@ class LoginWindow:
         else:
             messagebox.showerror("Access Denied", "Invalid username or password")
 
-class NebulaGUI:
+class DetectionGUI:
     def __init__(self, root, username, role):
         self.root = root
         self.username = username
         self.role = role
-        self.root.title(f"Nebula Engine - {role} Mode")
+        self.root.title(f"Behavioral Classifier - {role} Mode")
         center_window(self.root, 500, 500)
         self.auth = Authenticator()
         self.selected_file = None
 
-        tk.Label(root, text="Nebula Engine Dashboard", font=("Arial", 16, "bold")).pack(pady=10)
+        tk.Label(root, text="Behavioral Detection Dashboard", font=("Arial", 16, "bold")).pack(pady=10)
         
         # Display current user info (Requirement U1)
         tk.Label(root, text=f"Logged in as: {username} ({role})", fg="blue").pack()
@@ -81,17 +81,17 @@ class NebulaGUI:
     def select_file(self):
         self.selected_file = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
         if self.selected_file:
-            self.file_label.config(text=f"Selected: {self.selected_file.split('/')[-1]}", fg="black")
+            self.file_label.config(text=f"Selected: {os.path.basename(self.selected_file)}", fg="black")
 
     def execute(self):
         if not self.selected_file:
             messagebox.showwarning("Warning", "Please select a dataset first!")
             return
         try:
-            self.auth.log_action(self.username, f"Ran analysis on {self.selected_file.split('/')[-1]}")
+            self.auth.log_action(self.username, f"Ran analysis on {os.path.basename(self.selected_file)}")
             
             # Catch the NEW 'reason' variable from main.py
-            verdict, confidence, reason = run_nebula_pipeline(self.selected_file)
+            verdict, confidence, reason = run_detection_pipeline(self.selected_file)
             
             res_color = "red" if verdict == "Malicious" else "green"
             
@@ -108,7 +108,7 @@ class NebulaGUI:
         """Displays forensic logs AND the Global XAI Chart (Admin only)."""
         log_win = tk.Toplevel(self.root)
         log_win.title("System Audit Logs & Analytics")
-        center_window(log_win, 550, 600) # Made the window taller to fit the chart
+        center_window(log_win, 550, 600) 
         
         tk.Label(log_win, text="Forensic Audit Trail", font=("Arial", 12, "bold")).pack(pady=5)
         
@@ -137,11 +137,11 @@ class NebulaGUI:
             fg="gray30"
         ).pack(padx=10, pady=(0, 10))
         
-        if os.path.exists("nebula_feature_importance.png"):
+        if os.path.exists("behavioral_feature_importance.png"):
             # Load and resize the chart to fit nicely in the window
-            img = Image.open("nebula_feature_importance.png")
+            img = Image.open("behavioral_feature_importance.png")
             img = img.resize((450, 250), Image.Resampling.LANCZOS)
-            self.chart_img = ImageTk.PhotoImage(img) # Must save as self.chart_img so it doesn't get garbage collected
+            self.chart_img = ImageTk.PhotoImage(img) 
             
             tk.Label(log_win, image=self.chart_img).pack()
         else:
@@ -149,7 +149,7 @@ class NebulaGUI:
 
 def open_dashboard(username, role):
     main_root = tk.Tk()
-    NebulaGUI(main_root, username, role)
+    DetectionGUI(main_root, username, role)
     main_root.mainloop()
 
 if __name__ == "__main__":
