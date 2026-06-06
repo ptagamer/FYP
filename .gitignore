@@ -16,3 +16,5 @@ nebula_security.db
 
 # Machine Learning Models
 *.pkl
+__pycache__/
+*.db
