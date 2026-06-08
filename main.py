@@ -5,7 +5,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.svm import SVC
+from sklearn.svm import LinearSVC
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import classification_report
 from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test_split
@@ -15,7 +16,7 @@ from imblearn.over_sampling import SMOTE
 # --- Configuration ---
 MODEL_FILE = 'behavioral_rf_model.pkl'
 # This is your original training dataset
-DATASET_FILE = 'dynamic_api_call_sequence_per_malware_100_0_306.csv' 
+DATASET_FILE = 'merged_training_data.csv'  
 
 
 def describe_api_call(api_name):
@@ -151,12 +152,8 @@ def train_detection_model(data_path):
         class_weight='balanced_subsample',
     )
     
-    svm_model = SVC(
-        kernel='linear',
-        max_iter=5000,
-        probability=True,
-        random_state=42,
-        class_weight='balanced'
+    svm_model = CalibratedClassifierCV(
+        LinearSVC(max_iter=10000, class_weight='balanced', random_state=42)
     )
 
     # Build an imbalanced-learn pipeline that applies SMOTE only during training
@@ -232,9 +229,14 @@ def run_detection_pipeline(file_path):
     """
     DETECTION PHASE: Used by gui.py to analyze files with Human-Readable Local XAI.
     """
-    df = pd.read_csv(file_path)
-    if len(df) > 1:
-        print(f"Warning: {len(df)} rows detected, analyzing first sample only.")
+    from json_parser import flatten_speakeasy_json
+    
+    if file_path.lower().endswith('.json'):
+        df = flatten_speakeasy_json(file_path)
+    else:
+        df = pd.read_csv(file_path)
+        if len(df) > 1:
+            print(f"Warning: {len(df)} rows detected, analyzing first sample only.")
 
     # Ensure we don't try to drop columns that aren't there.
     X_new = df.drop(['hash', 'malware'], axis=1, errors='ignore')

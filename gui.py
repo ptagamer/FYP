@@ -68,7 +68,7 @@ class DetectionGUI:
         self.file_label.pack(pady=20)
 
         # Standard Features
-        tk.Button(root, text="Select Dataset (CSV)", command=self.select_file, width=25).pack(pady=5)
+        tk.Button(root, text="Select Dataset", command=self.select_file, width=25).pack(pady=5)
         tk.Button(root, text="Run Analysis", command=self.execute, width=25, bg="teal", fg="white").pack(pady=5)
 
         # ADMIN ONLY: Audit Log Feature (Requirement F7)
@@ -79,7 +79,7 @@ class DetectionGUI:
         tk.Button(root, text="Logout & Exit", command=root.quit, width=25).pack(pady=20)
 
     def select_file(self):
-        self.selected_file = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
+        self.selected_file = filedialog.askopenfilename(filetypes=[("Supported Datasets", "*.csv *.json")])
         if self.selected_file:
             self.file_label.config(text=f"Selected: {os.path.basename(self.selected_file)}", fg="black")
 
