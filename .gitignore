@@ -12,6 +12,8 @@ archive
 merged_training_data.csv
 speakeasy_training_data.csv
 behavioral_feature_importance.png
+demo_benign_software.csv
+demo_malicious_payload.csv
 
 # Databases
 nebula_security.db

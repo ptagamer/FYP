@@ -1,9 +1,13 @@
 import sqlite3
 import hashlib
 from datetime import datetime
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_DB_FILE = PROJECT_ROOT / "nebula_security.db"
 
 class Authenticator:
-    def __init__(self, db_name="nebula_security.db"):
+    def __init__(self, db_name=DEFAULT_DB_FILE):
         self.db_name = db_name
         self._setup_database()
 
@@ -20,7 +24,7 @@ class Authenticator:
                     role TEXT NOT NULL
                 )
             ''')
-            # 2. Audit Log Table (Requirement from your report)
+            # 2. Audit Log Table (Requirement from report)
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS audit_logs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
