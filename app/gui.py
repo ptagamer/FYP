@@ -509,10 +509,11 @@ class DetectionGUI:
         tk.Label(
             log_win,
             text=(
-                "This chart shows which behavioral features most influenced the trained Random Forest model "
-                "across the training dataset. Features named t_0 to t_99 represent API call positions in "
-                "the behavioral sequence, so their importance means that sequence position was useful to "
-                "the model. It explains model decision patterns, not guaranteed forensic causes."
+                "This chart shows which features most influenced the trained Random Forest model across "
+                "the training dataset. Features named t_0 to t_99 represent API call positions in the "
+                "behavioral sequence. Features such as sequence_entropy, sequence_repeat_rate, and "
+                "sequence_unique_count summarize broader behavior patterns. It explains model decision "
+                "patterns, not guaranteed forensic causes."
             ),
             wraplength=500,
             justify="left",
