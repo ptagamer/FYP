@@ -329,7 +329,7 @@ def train_detection_model(data_path):
         plt.barh(feature_importance_df['Feature'], feature_importance_df['Importance'], color='#008080')
         plt.xlabel('Importance Score')
         plt.ylabel('API Sequence Position')
-        plt.title('Top 10 Behavioral Indicators (Global XAI)')
+        plt.title('Top 10 Model Feature Influences')
         plt.gca().invert_yaxis()
         plt.tight_layout()
         plt.savefig(temp_chart_file)

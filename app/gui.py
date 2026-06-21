@@ -505,13 +505,14 @@ class DetectionGUI:
         text_area.config(state=tk.DISABLED) 
 
         # --- NEW VISUAL XAI LOGIC (Admin Analytics) ---
-        tk.Label(log_win, text="Global XAI: Feature Importance", font=("Arial", 12, "bold")).pack(pady=10)
+        tk.Label(log_win, text="Global Model Explanation: Feature Importance", font=("Arial", 12, "bold")).pack(pady=10)
         tk.Label(
             log_win,
             text=(
-                "This chart shows which behavioral features the model relies on most overall. "
-                "Longer bars mean the model used that feature more when making decisions across the training data. "
-                "It is a global explanation, not a per-file reason."
+                "This chart shows which behavioral features most influenced the trained Random Forest model "
+                "across the training dataset. Features named t_0 to t_99 represent API call positions in "
+                "the behavioral sequence, so their importance means that sequence position was useful to "
+                "the model. It explains model decision patterns, not guaranteed forensic causes."
             ),
             wraplength=500,
             justify="left",
