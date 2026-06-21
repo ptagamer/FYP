@@ -5,6 +5,14 @@ import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 from imblearn.over_sampling import SMOTE
 
+"""
+Legacy/supporting preprocessing module.
+
+The current active training pipeline is implemented in app/main.py.
+This module is retained for design traceability and earlier modular
+data-processing experiments.
+"""
+
 class BehavioralDataProcessor:
     """
     Handles ingestion, integrity verification, and cleaning 

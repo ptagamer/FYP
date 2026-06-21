@@ -267,6 +267,11 @@ def train_detection_model(data_path):
         print("\n=> SVM performed best. Saving SVM model...")
         best_pipeline = svm_pipeline
 
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    temp_model_file = MODEL_FILE.with_suffix(MODEL_FILE.suffix + '.tmp')
+    temp_chart_file = CHART_FILE.with_suffix(CHART_FILE.suffix + '.tmp')
+    chart_created = False
+
     # Extract feature importances only if the best model supports it
     clf = best_pipeline.named_steps['clf']
     if hasattr(clf, 'feature_importances_'):
@@ -282,18 +287,23 @@ def train_detection_model(data_path):
         plt.title('Top 10 Behavioral Indicators (Global XAI)')
         plt.gca().invert_yaxis()
         plt.tight_layout()
-        MODELS_DIR.mkdir(parents=True, exist_ok=True)
-        plt.savefig(CHART_FILE)
-        print(f"Global XAI chart saved as '{CHART_FILE}'")
+        plt.savefig(temp_chart_file)
+        plt.close()
+        chart_created = True
+        print(f"Global XAI chart staged as '{temp_chart_file}'")
 
-    MODELS_DIR.mkdir(parents=True, exist_ok=True)
     joblib.dump(
         {
             'pipeline': best_pipeline,
             'feature_names': list(X_train.columns),
         },
-        MODEL_FILE,
+        temp_model_file,
     )
+
+    if chart_created:
+        os.replace(temp_chart_file, CHART_FILE)
+        print(f"Global XAI chart saved as '{CHART_FILE}'")
+    os.replace(temp_model_file, MODEL_FILE)
 
     print(f"Best model saved as '{MODEL_FILE}'")
 
