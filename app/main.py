@@ -22,6 +22,7 @@ MODEL_FILE = MODELS_DIR / 'behavioral_rf_model.pkl'
 CHART_FILE = MODELS_DIR / 'behavioral_feature_importance.png'
 # This is your original training dataset
 DATASET_FILE = DATA_DIR / 'merged_training_data.csv'
+MIN_NONZERO_API_CALLS = 5
 
 
 def describe_api_call(api_name):
@@ -178,6 +179,50 @@ def _class_distribution(values):
     unique, counts = np.unique(values, return_counts=True)
     return dict(zip(unique.tolist(), counts.tolist()))
 
+
+def _sequence_columns(columns):
+    return [column for column in columns if column.startswith('t_') and column[2:].isdigit()]
+
+
+def _validate_behavioral_input(X_raw, expected_columns, is_json_input):
+    """
+    Validate raw behavioral sequence input before engineered features and model inference.
+    This prevents unrelated or empty files from being converted into all-zero model input.
+    """
+    if X_raw.empty:
+        raise ValueError('Input file is empty. Please provide a behavioral CSV or JSON sample.')
+
+    sequence_columns = _sequence_columns(X_raw.columns)
+    if not sequence_columns:
+        raise ValueError(
+            'Input file is invalid. Expected behavioral sequence columns such as t_0, t_1, ..., t_99.'
+        )
+
+    expected_sequence_columns = _sequence_columns(expected_columns)
+    missing_sequence_columns = [
+        column for column in expected_sequence_columns if column not in X_raw.columns
+    ]
+    if missing_sequence_columns:
+        preview = ', '.join(missing_sequence_columns[:5])
+        suffix = '...' if len(missing_sequence_columns) > 5 else ''
+        raise ValueError(
+            f'Input file is missing required behavioral sequence columns: {preview}{suffix}'
+        )
+
+    sequence_frame = X_raw[expected_sequence_columns].apply(pd.to_numeric, errors='coerce').fillna(0)
+    non_zero_api_calls = int((sequence_frame.iloc[0] != 0).sum())
+
+    if non_zero_api_calls < MIN_NONZERO_API_CALLS:
+        if is_json_input:
+            raise ValueError(
+                'Input JSON contains no usable API behavior. '
+                f'At least {MIN_NONZERO_API_CALLS} recognized non-zero API calls are required.'
+            )
+        raise ValueError(
+            'Input file contains no usable API behavior. '
+            f'At least {MIN_NONZERO_API_CALLS} non-zero API calls are required.'
+        )
+
 def train_detection_model(data_path):
     """
     TRAINING PHASE: Splits off an untouched test set, performs cross-validation
@@ -316,7 +361,9 @@ def run_detection_pipeline(file_path):
     except ImportError:
         from json_parser import flatten_speakeasy_json
     
-    if file_path.lower().endswith('.json'):
+    is_json_input = file_path.lower().endswith('.json')
+
+    if is_json_input:
         df = flatten_speakeasy_json(file_path)
     else:
         df = pd.read_csv(file_path)
@@ -325,7 +372,6 @@ def run_detection_pipeline(file_path):
 
     # Ensure we don't try to drop columns that aren't there.
     X_new = df.drop(['hash', 'malware'], axis=1, errors='ignore')
-    X_new = engineer_sequence_features(X_new)
 
     try:
         loaded_model = joblib.load(MODEL_FILE)
@@ -339,6 +385,8 @@ def run_detection_pipeline(file_path):
         pipeline = loaded_model
         expected_columns = list(getattr(pipeline, 'feature_names_in_', X_new.columns))
 
+    _validate_behavioral_input(X_new, expected_columns, is_json_input)
+    X_new = engineer_sequence_features(X_new)
     X_new = X_new.reindex(columns=expected_columns, fill_value=0)
     X_new = X_new.head(1)
 
