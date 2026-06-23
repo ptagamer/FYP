@@ -332,7 +332,7 @@ def train_detection_model(data_path):
         plt.title('Top 10 Model Feature Influences')
         plt.gca().invert_yaxis()
         plt.tight_layout()
-        plt.savefig(temp_chart_file)
+        plt.savefig(temp_chart_file, format='png')
         plt.close()
         chart_created = True
         print(f"Global XAI chart staged as '{temp_chart_file}'")
