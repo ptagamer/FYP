@@ -1,5 +1,6 @@
 import sqlite3
 import hashlib
+import os
 from datetime import datetime
 from pathlib import Path
 
@@ -12,8 +13,20 @@ class Authenticator:
         self._setup_database()
 
     @staticmethod
-    def _hash_password(password):
-        return hashlib.sha256(password.encode()).hexdigest()
+    def _hash_password(password, salt=None):
+        """Hashes a password with PBKDF2-HMAC-SHA256 using a 32-byte salt.
+
+        Args:
+            password: The plaintext password to hash.
+            salt: A bytes salt. If None, a new random salt is generated.
+
+        Returns:
+            A tuple of (password_hash_hex, salt_hex).
+        """
+        if salt is None:
+            salt = os.urandom(32)
+        dk = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, iterations=100_000)
+        return dk.hex(), salt.hex()
 
     @staticmethod
     def _validate_credentials_input(username, password):
@@ -34,6 +47,7 @@ class Authenticator:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     username TEXT UNIQUE NOT NULL,
                     password_hash TEXT NOT NULL,
+                    salt TEXT NOT NULL,
                     role TEXT NOT NULL
                 )
             ''')
@@ -52,11 +66,16 @@ class Authenticator:
             if cursor.fetchone()[0] == 0:
                 # Admin: Full Access
                 # Analyst: Detection Only
+                admin_hash, admin_salt = self._hash_password("admin123")
+                analyst_hash, analyst_salt = self._hash_password("pass123")
                 users = [
-                    ("admin", self._hash_password("admin123"), "Admin"),
-                    ("analyst1", self._hash_password("pass123"), "Analyst")
+                    ("admin", admin_hash, admin_salt, "Admin"),
+                    ("analyst1", analyst_hash, analyst_salt, "Analyst")
                 ]
-                cursor.executemany("INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)", users)
+                cursor.executemany(
+                    "INSERT INTO users (username, password_hash, salt, role) VALUES (?, ?, ?, ?)",
+                    users,
+                )
             conn.commit()
 
     def log_action(self, username, action):
@@ -70,16 +89,17 @@ class Authenticator:
 
     def verify_credentials(self, username, password):
         """Verifies user and returns their role if successful."""
-        input_hash = self._hash_password(password)
         with sqlite3.connect(self.db_name) as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT password_hash, role FROM users WHERE username = ?", (username,))
+            cursor.execute("SELECT password_hash, salt, role FROM users WHERE username = ?", (username,))
             row = cursor.fetchone()
             
-            if row and row[0] == input_hash:
-                role = row[1]
-                self.log_action(username, "Successful Login")
-                return role # Returns 'Admin' or 'Analyst'
+            if row:
+                stored_hash, salt_hex, role = row
+                input_hash, _ = self._hash_password(password, salt=bytes.fromhex(salt_hex))
+                if input_hash == stored_hash:
+                    self.log_action(username, "Successful Login")
+                    return role  # Returns 'Admin' or 'Analyst'
         return None
 
     def list_users(self, role=None):
@@ -98,12 +118,13 @@ class Authenticator:
     def create_analyst(self, username, password):
         """Creates an Analyst account."""
         clean_username = self._validate_credentials_input(username, password)
+        pw_hash, salt_hex = self._hash_password(password)
         try:
             with sqlite3.connect(self.db_name) as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
-                    (clean_username, self._hash_password(password), "Analyst"),
+                    "INSERT INTO users (username, password_hash, salt, role) VALUES (?, ?, ?, ?)",
+                    (clean_username, pw_hash, salt_hex, "Analyst"),
                 )
                 conn.commit()
         except sqlite3.IntegrityError as exc:
@@ -122,9 +143,10 @@ class Authenticator:
             if row[0] != "Analyst":
                 raise ValueError("Only Analyst accounts can be managed here.")
 
+            pw_hash, salt_hex = self._hash_password(new_password)
             cursor.execute(
-                "UPDATE users SET password_hash = ? WHERE username = ?",
-                (self._hash_password(new_password), clean_username),
+                "UPDATE users SET password_hash = ?, salt = ? WHERE username = ?",
+                (pw_hash, salt_hex, clean_username),
             )
             conn.commit()
         return clean_username
