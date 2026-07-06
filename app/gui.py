@@ -16,6 +16,10 @@ except ImportError:
     from auth import Authenticator
     from main import DATASET_FILE, train_detection_model, run_detection_pipeline
 
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from scripts.create_demo_files import create_demo_samples, DATA_DIR
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DB_FILE = PROJECT_ROOT / "nebula_security.db"
 CHART_FILE = PROJECT_ROOT / "models" / "behavioral_feature_importance.png"
@@ -109,6 +113,7 @@ class DetectionGUI:
             tk.Button(root, text="Manage Analysts", command=self.open_user_management_window, width=25, bg="navy", fg="white").pack(pady=5)
             self.training_button = tk.Button(root, text="Train Model", command=self.open_training_window, width=25, bg="purple", fg="white")
             self.training_button.pack(pady=5)
+            tk.Button(root, text="Generate Demo Files", command=self.open_demo_generator_window, width=25, bg="darkgreen", fg="white").pack(pady=5)
 
         tk.Button(root, text="Logout & Exit", command=root.quit, width=25).pack(pady=20)
 
@@ -484,6 +489,101 @@ class DetectionGUI:
             status_label.config(text=f"Deleted analyst account: {deleted_username}", fg="green")
         except ValueError as exc:
             messagebox.showerror("Delete Analyst Failed", str(exc))
+
+    def open_demo_generator_window(self):
+        """Opens a window to generate demo malicious/benign CSV files from a chosen dataset."""
+        if self.role != "Admin":
+            messagebox.showerror("Access Denied", "Only admins can generate demo files.")
+            return
+
+        demo_win = tk.Toplevel(self.root)
+        demo_win.title("Generate Demo Files")
+        center_window(demo_win, 550, 300)
+        demo_win.minsize(450, 260)
+        demo_win.columnconfigure(0, weight=1)
+
+        tk.Label(demo_win, text="Demo File Generator", font=("Arial", 12, "bold")).grid(
+            row=0, column=0, sticky="ew", padx=10, pady=(10, 6),
+        )
+
+        tk.Label(
+            demo_win,
+            text=(
+                "Select a CSV dataset with a 'malware' column. One malicious (malware=1) "
+                "and one benign (malware=0) sample will be extracted and saved to the data folder."
+            ),
+            wraplength=500,
+            justify="left",
+            fg="gray30",
+        ).grid(row=1, column=0, sticky="ew", padx=10, pady=(0, 8))
+
+        selected_csv = tk.StringVar(value=str(DATA_DIR / 'dynamic_api_call_sequence_per_malware_100_0_306.csv'))
+
+        file_frame = tk.Frame(demo_win)
+        file_frame.grid(row=2, column=0, sticky="ew", padx=10, pady=(0, 8))
+        file_frame.columnconfigure(0, weight=1)
+
+        tk.Label(file_frame, text="Source CSV:").grid(row=0, column=0, columnspan=2, sticky="w")
+        file_entry = tk.Entry(file_frame, textvariable=selected_csv, state="readonly")
+        file_entry.grid(row=1, column=0, sticky="ew", pady=(3, 0))
+
+        def browse_csv():
+            path = filedialog.askopenfilename(
+                initialdir=DATA_DIR,
+                filetypes=[("CSV datasets", "*.csv")],
+            )
+            if path:
+                selected_csv.set(path)
+
+        tk.Button(file_frame, text="Browse", command=browse_csv, width=10).grid(
+            row=1, column=1, sticky="e", padx=(8, 0), pady=(3, 0),
+        )
+
+        status_label = tk.Label(demo_win, text="", fg="gray30", anchor="w", wraplength=500, justify="left")
+        status_label.grid(row=3, column=0, sticky="ew", padx=10, pady=(0, 6))
+
+        action_frame = tk.Frame(demo_win)
+        action_frame.grid(row=4, column=0, sticky="ew", padx=10, pady=(0, 10))
+        action_frame.columnconfigure(0, weight=1)
+
+        def generate():
+            csv_path = selected_csv.get()
+            if not csv_path:
+                messagebox.showwarning("No File", "Please select a source CSV first.")
+                return
+            try:
+                result = create_demo_samples(csv_path)
+                if result is None:
+                    status_label.config(text="Generation failed: source file not found.", fg="red")
+                    return
+                mal_path, ben_path = result
+                self.auth.log_action(
+                    self.username,
+                    f"Generated demo files from {Path(csv_path).name}",
+                )
+                status_label.config(
+                    text=(
+                        f"Demo files created successfully:\n"
+                        f"  Malicious: {Path(mal_path).name}\n"
+                        f"  Benign: {Path(ben_path).name}"
+                    ),
+                    fg="green",
+                )
+                messagebox.showinfo("Success", "Demo files generated successfully!")
+            except ValueError as exc:
+                status_label.config(text=str(exc), fg="red")
+                messagebox.showerror("Generation Failed", str(exc))
+            except Exception as exc:
+                status_label.config(text=f"Error: {exc}", fg="red")
+                messagebox.showerror("Generation Failed", str(exc))
+
+        tk.Button(
+            action_frame, text="Generate", width=16, bg="darkgreen", fg="white",
+            command=generate,
+        ).grid(row=0, column=1, sticky="e")
+        tk.Button(
+            action_frame, text="Back", width=10, command=demo_win.destroy,
+        ).grid(row=0, column=2, sticky="e", padx=(8, 0))
 
     def view_logs(self):
         """Displays forensic logs AND the Global XAI Chart (Admin only)."""
