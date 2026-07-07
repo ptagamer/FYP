@@ -589,11 +589,11 @@ class DetectionGUI:
         """Displays forensic logs AND the Global XAI Chart (Admin only)."""
         log_win = tk.Toplevel(self.root)
         log_win.title("System Audit Logs & Analytics")
-        center_window(log_win, 550, 600) 
+        center_window(log_win, 900, 850) 
         
-        tk.Label(log_win, text="Forensic Audit Trail", font=("Arial", 12, "bold")).pack(pady=5)
+        tk.Label(log_win, text="Forensic Audit Trail", font=("Arial", 15, "bold")).pack(pady=5)
         
-        text_area = tk.Text(log_win, height=10, width=60)
+        text_area = tk.Text(log_win, height=10, width=100, font=("Courier", 10))
         text_area.pack(padx=10, pady=5)
         
         with sqlite3.connect(DB_FILE) as conn:
@@ -605,7 +605,7 @@ class DetectionGUI:
         text_area.config(state=tk.DISABLED) 
 
         # --- NEW VISUAL XAI LOGIC (Admin Analytics) ---
-        tk.Label(log_win, text="Global Model Explanation: Feature Importance", font=("Arial", 12, "bold")).pack(pady=10)
+        tk.Label(log_win, text="Global Model Explanation: Feature Importance", font=("Arial", 15, "bold")).pack(pady=10)
         tk.Label(
             log_win,
             text=(
@@ -615,15 +615,16 @@ class DetectionGUI:
                 "sequence_unique_count summarize broader behavior patterns. It explains model decision "
                 "patterns, not guaranteed forensic causes."
             ),
-            wraplength=500,
+            wraplength=820,
             justify="left",
+            font=("Arial", 11),
             fg="gray30"
         ).pack(padx=10, pady=(0, 10))
         
         if CHART_FILE.exists():
             # Load and resize the chart to fit nicely in the window
             img = Image.open(CHART_FILE)
-            img = img.resize((450, 250), Image.Resampling.LANCZOS)
+            img = img.resize((820, 460), Image.Resampling.LANCZOS)
             self.chart_img = ImageTk.PhotoImage(img) 
             
             tk.Label(log_win, image=self.chart_img).pack()

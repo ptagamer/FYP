@@ -14,6 +14,7 @@ from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test
 from imblearn.pipeline import Pipeline as ImbPipeline
 from imblearn.over_sampling import SMOTE
 
+
 # --- Configuration ---
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / 'data'
@@ -325,11 +326,27 @@ def train_detection_model(data_path):
         feature_importance_df = pd.DataFrame({'Feature': feature_names, 'Importance': importances})
         feature_importance_df = feature_importance_df.sort_values(by='Importance', ascending=False).head(10)
 
-        plt.figure(figsize=(10, 6))
-        plt.barh(feature_importance_df['Feature'], feature_importance_df['Importance'], color='#008080')
+        # For malware samples, find the most common API value at each top t_N position,
+        # then decode the numeric index to a human-readable API name using the existing helper.
+        malware_rows = df[df['malware'] == 1]
+
+        def decode_feature_label(col_name):
+            """Return 'APIName (t_N)' for t_N columns, or col_name as-is for engineered features."""
+            if col_name.startswith('t_') and col_name[2:].isdigit() and col_name in malware_rows.columns:
+                most_common_val = malware_rows[col_name].mode()
+                if not most_common_val.empty:
+                    api_name = _api_name_from_encoded_value(most_common_val.iloc[0])
+                    if api_name:
+                        return f'{api_name} ({col_name})'
+            return col_name
+
+        feature_importance_df['Label'] = feature_importance_df['Feature'].apply(decode_feature_label)
+
+        plt.figure(figsize=(12, 6))
+        plt.barh(feature_importance_df['Label'], feature_importance_df['Importance'], color='#008080')
         plt.xlabel('Importance Score')
-        plt.ylabel('API Sequence Position')
-        plt.title('Top 10 Model Feature Influences')
+        plt.ylabel('Most Common API Call at Position')
+        plt.title('Top 10 Most Influential API Calls (Global XAI)')
         plt.gca().invert_yaxis()
         plt.tight_layout()
         plt.savefig(temp_chart_file, format='png')
