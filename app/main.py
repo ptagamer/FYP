@@ -82,6 +82,220 @@ def describe_api_call(api_name):
     return f'Calls {api_name}; malware may abuse it for execution, persistence, or stealth.'
 
 
+# --- MITRE ATT&CK® Enterprise Behavioral Taxonomy ---
+MITRE_ATTACK_MAPPING = {
+    'injection': {
+        'id': 'T1055',
+        'name': 'Process Injection',
+        'tactic': 'Privilege Escalation / Defense Evasion',
+        'severity': 'Critical',
+        'color': '#EF4444',
+        'apis': {
+            'createremotethread', 'createremotethreadex', 'ntcreatethreadex',
+            'rtlcreateuserthread', 'ntqueueapcthread', 'ntsetcontextthread',
+            'ntgetcontextthread', 'writeprocessmemory', 'readprocessmemory',
+            'ntwritevirtualmemory', 'ntreadvirtualmemory', 'ntallocatevirtualmemory',
+            'ntprotectvirtualmemory', 'virtualallocex', 'virtualprotectex'
+        }
+    },
+    'process_access': {
+        'id': 'T1057',
+        'name': 'Process Discovery & Handle Tampering',
+        'tactic': 'Discovery / Defense Evasion',
+        'severity': 'High',
+        'color': '#F97316',
+        'apis': {
+            'openprocess', 'openthread', 'ntopenprocess', 'ntopenthread', 'ntduplicateobject',
+            'ntsuspendthread', 'ntresumethread', 'ntterminateprocess', 'createtoolhelp32snapshot',
+            'process32firstw', 'process32nextw', 'thread32first', 'thread32next',
+            'module32firstw', 'module32nextw'
+        }
+    },
+    'registry_persistence': {
+        'id': 'T1547.001',
+        'name': 'Registry Run Keys / Startup Folder',
+        'tactic': 'Persistence / Privilege Escalation',
+        'severity': 'High',
+        'color': '#F97316',
+        'apis': {
+            'regsetvalueexw', 'regsetvalueexa', 'regcreatekeyexw', 'regcreatekeyexa',
+            'regdeletevaluew', 'regdeletevaluea', 'regdeletekeyw', 'regdeletekeya',
+            'ntsetvaluekey', 'ntcreatekey', 'ntdeletekey', 'ntdeletevaluekey'
+        }
+    },
+    'registry_discovery': {
+        'id': 'T1012',
+        'name': 'Query Registry',
+        'tactic': 'Discovery',
+        'severity': 'Medium',
+        'color': '#F59E0B',
+        'apis': {
+            'regqueryvalueexw', 'regqueryvalueexa', 'regqueryinfokeyw', 'regqueryinfokeya',
+            'regopenkeyexw', 'regopenkeyexa', 'regenumkeyw', 'regenumkeyexw', 'regenumkeyexa',
+            'regenumvaluew', 'regenumvaluea', 'ntopenkey', 'ntopenkeyex', 'ntqueryvaluekey', 'ntquerykey'
+        }
+    },
+    'network_c2': {
+        'id': 'T1071.001',
+        'name': 'Web Protocols (Command & Control)',
+        'tactic': 'Command and Control',
+        'severity': 'High',
+        'color': '#F97316',
+        'apis': {
+            'connect', 'socket', 'bind', 'listen', 'accept', 'send', 'recv', 'sendto', 'recvfrom',
+            'internetopenw', 'internetopena', 'internetopenurlw', 'internetopenurla',
+            'internetconnectw', 'internetconnecta', 'httpopenrequestw', 'httpopenrequesta',
+            'httpsendrequestw', 'httpsendrequesta', 'wsastartup', 'wsasocketa', 'wsasocketw',
+            'wsaconnect', 'wsasend', 'wsarecv', 'wsasendto', 'wsarecvfrom', 'dnsquery_a',
+            'getaddrinfo', 'getaddrinfow', 'gethostbyname', 'urldownloadtofilew',
+            'internetreadfile', 'internetwritefile'
+        }
+    },
+    'defense_evasion': {
+        'id': 'T1497.001',
+        'name': 'Virtualization/Sandbox Evasion: System Checks',
+        'tactic': 'Defense Evasion',
+        'severity': 'High',
+        'color': '#F97316',
+        'apis': {
+            'isdebuggerpresent', 'setunhandledexceptionfilter', 'outputdebugstringa', 'outputdebugstringw',
+            'findwindowa', 'findwindoww', 'findwindowexa', 'findwindowexw', 'ntdelayexecution',
+            'rtladdvectoredexceptionhandler', 'rtlremovevectoredexceptionhandler'
+        }
+    },
+    'credential_access': {
+        'id': 'T1056.001',
+        'name': 'Input Capture: Keylogging & Credentials',
+        'tactic': 'Credential Access',
+        'severity': 'Critical',
+        'color': '#EF4444',
+        'apis': {
+            'getasynckeystate', 'getkeyboardstate', 'getkeystate', 'registerhotkey',
+            'cryptunprotectdata', 'cryptunprotectmemory'
+        }
+    },
+    'encryption_impact': {
+        'id': 'T1486',
+        'name': 'Data Encrypted for Impact (Ransomware Behavior)',
+        'tactic': 'Impact',
+        'severity': 'High',
+        'color': '#F97316',
+        'apis': {
+            'cryptencrypt', 'cryptdecrypt', 'cryptgenkey', 'cryptexportkey',
+            'cryptacquirecontextw', 'cryptacquirecontexta', 'cryptprotectdata', 'cryptprotectmemory'
+        }
+    },
+    'service_tampering': {
+        'id': 'T1543.003',
+        'name': 'Windows Service Execution & Manipulation',
+        'tactic': 'Persistence / Privilege Escalation',
+        'severity': 'Critical',
+        'color': '#EF4444',
+        'apis': {
+            'createservicew', 'createservicea', 'startservicew', 'startservicea',
+            'openscmanagerw', 'openscmanagera', 'openservicew', 'openservicea',
+            'controlservice', 'deleteservice'
+        }
+    },
+    'file_staging': {
+        'id': 'T1105',
+        'name': 'Ingress Tool Transfer & File Manipulation',
+        'tactic': 'Command and Control / Execution',
+        'severity': 'Medium',
+        'color': '#F59E0B',
+        'apis': {
+            'copyfilea', 'copyfilew', 'copyfileexw', 'movefilewithprogressw',
+            'deletefilew', 'ntdeletefile', 'ntwritefile', 'ntcreatefile',
+            'gettemppathw', 'createdirectoryw', 'createdirectoryexw'
+        }
+    },
+    'system_recon': {
+        'id': 'T1082',
+        'name': 'System Information Discovery & Profiling',
+        'tactic': 'Discovery',
+        'severity': 'Low',
+        'color': '#38BDF8',
+        'apis': {
+            'getsystemmetrics', 'getsysteminfo', 'getnativesysteminfo', 'getcomputernamea',
+            'getcomputernamew', 'getusernamea', 'getusernamew', 'globalmemorystatusex',
+            'getadaptersinfo', 'getadaptersaddresses', 'netusergetinfo'
+        }
+    }
+}
+
+
+def map_api_to_mitre(api_name):
+    """Maps an API call name to its matching MITRE ATT&CK technique details, or None."""
+    if not api_name:
+        return None
+    clean = api_name.lower().split('.')[-1]
+    for key, data in MITRE_ATTACK_MAPPING.items():
+        if clean in data['apis']:
+            return {
+                'category_key': key,
+                'id': data['id'],
+                'name': data['name'],
+                'tactic': data['tactic'],
+                'severity': data['severity'],
+                'color': data['color'],
+                'api': api_name,
+            }
+    return None
+
+
+def calculate_threat_score(malware_probability, detected_techniques):
+    """
+    Computes a composite Threat Severity Score (0 - 100) from ML model confidence
+    and active MITRE ATT&CK behavioral indicators.
+    """
+    base_score = float(malware_probability * 100.0)
+
+    critical_count = sum(1 for t in detected_techniques if t.get('severity') == 'Critical')
+    high_count = sum(1 for t in detected_techniques if t.get('severity') == 'High')
+    medium_count = sum(1 for t in detected_techniques if t.get('severity') == 'Medium')
+
+    modifier = (critical_count * 8.0) + (high_count * 4.0) + (medium_count * 1.5)
+
+    if malware_probability >= 0.5:
+        composite_score = min(100.0, max(base_score, base_score * 0.7 + modifier + 20.0))
+    else:
+        if critical_count > 0:
+            composite_score = min(75.0, base_score + (critical_count * 16.0))
+        elif high_count > 1:
+            composite_score = min(55.0, base_score + (high_count * 8.0))
+        else:
+            composite_score = max(0.0, base_score)
+
+    composite_score = round(composite_score, 1)
+
+    if composite_score >= 80:
+        severity = "CRITICAL"
+        color = "#EF4444"
+    elif composite_score >= 60:
+        severity = "HIGH"
+        color = "#F97316"
+    elif composite_score >= 40:
+        severity = "MEDIUM"
+        color = "#F59E0B"
+    elif composite_score >= 20:
+        severity = "LOW"
+        color = "#38BDF8"
+    else:
+        severity = "CLEAN / BENIGN"
+        color = "#10B981"
+
+    return composite_score, severity, color
+
+
+class DetectionReport(dict):
+    """Report dictionary subclass that unpacks as (verdict, confidence, reason) for legacy compatibility."""
+    def __iter__(self):
+        yield self["verdict"]
+        yield self["confidence"]
+        yield self["reason"]
+
+
+
 def _api_name_from_encoded_value(value):
     """Map a numeric API sequence value back to the API name used by json_parser."""
     try:
@@ -368,9 +582,49 @@ def train_detection_model(data_path):
 
     print(f"Best model saved as '{MODEL_FILE}'")
 
+def extract_sample_behaviors(X_row):
+    """
+    Extracts ordered non-zero API calls from the sample, maps them to MITRE ATT&CK,
+    and returns timeline events and deduplicated MITRE techniques.
+    """
+    api_timeline = []
+    seen_mitre_ids = set()
+    detected_techniques = []
+
+    sequence_cols = [c for c in X_row.columns if c.startswith('t_') and c[2:].isdigit()]
+    sequence_cols = sorted(sequence_cols, key=lambda c: int(c[2:]))
+
+    for col in sequence_cols:
+        val = X_row[col].iloc[0]
+        api_name = _api_name_from_encoded_value(val)
+        if not api_name:
+            continue
+
+        mitre_info = map_api_to_mitre(api_name)
+        event = {
+            'step': col,
+            'api': api_name,
+            'description': describe_api_call(api_name),
+            'mitre': mitre_info,
+        }
+        api_timeline.append(event)
+
+        if mitre_info:
+            tech_id = mitre_info['id']
+            if tech_id not in seen_mitre_ids:
+                seen_mitre_ids.add(tech_id)
+                detected_techniques.append(mitre_info)
+
+    severity_order = {'Critical': 0, 'High': 1, 'Medium': 2, 'Low': 3}
+    detected_techniques.sort(key=lambda t: severity_order.get(t.get('severity', 'Low'), 4))
+
+    return api_timeline, detected_techniques
+
+
 def run_detection_pipeline(file_path):
     """
-    DETECTION PHASE: Used by gui.py to analyze files with Human-Readable Local XAI.
+    DETECTION PHASE: Analyzes behavioral samples with ML inference,
+    local explainability, MITRE ATT&CK mapping, and 0-100 threat severity scoring.
     """
     try:
         from .json_parser import flatten_speakeasy_json
@@ -386,7 +640,6 @@ def run_detection_pipeline(file_path):
         if len(df) > 1:
             print(f"Warning: {len(df)} rows detected, analyzing first sample only.")
 
-    # Ensure we don't try to drop columns that aren't there.
     X_new = df.drop(['hash', 'malware'], axis=1, errors='ignore')
 
     try:
@@ -408,16 +661,39 @@ def run_detection_pipeline(file_path):
 
     prediction = pipeline.predict(X_new)
     probabilities = pipeline.predict_proba(X_new)
-    
+
+    classes = list(getattr(pipeline, 'classes_', [0, 1]))
+    malware_idx = classes.index(1) if 1 in classes else 1
+    malware_prob = float(probabilities[0][malware_idx]) if len(probabilities[0]) > malware_idx else float(prediction[0])
+
     confidence = float(max(probabilities[0]) * 100)
     verdict = "Malicious" if prediction[0] == 1 else "Benign"
+
+    api_timeline, detected_techniques = extract_sample_behaviors(X_new)
+    threat_score, severity, severity_color = calculate_threat_score(malware_prob, detected_techniques)
 
     if verdict == "Malicious":
         reason = explain_local_indicator(X_new, pipeline)
     else:
-        reason = "Normal execution flow. No red flags found."
-        
-    return verdict, confidence, reason
+        if detected_techniques:
+            reason = f"Normal execution flow overall ({confidence:.1f}% benign confidence), with {len(detected_techniques)} monitored API pattern(s)."
+        else:
+            reason = "Normal execution flow. No red flags found."
+
+    report = DetectionReport({
+        "verdict": verdict,
+        "confidence": confidence,
+        "threat_score": threat_score,
+        "severity": severity,
+        "severity_color": severity_color,
+        "reason": reason,
+        "malware_probability": malware_prob,
+        "mitre_techniques": detected_techniques,
+        "api_timeline": api_timeline,
+        "total_api_calls": len(api_timeline),
+        "unique_api_count": len(set(e['api'] for e in api_timeline)),
+    })
+    return report
 
 if __name__ == "__main__":
     # Running this script directly starts the comprehensive training & validation process

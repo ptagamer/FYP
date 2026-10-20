@@ -17,6 +17,7 @@ demo_malicious_payload.csv
 
 # Databases
 nebula_security.db
+behavioral_security.db
 
 # Machine Learning Models and Artifacts
 models/

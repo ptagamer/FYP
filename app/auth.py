@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_DB_FILE = PROJECT_ROOT / "nebula_security.db"
+DEFAULT_DB_FILE = PROJECT_ROOT / "behavioral_security.db"
 
 class Authenticator:
     def __init__(self, db_name=DEFAULT_DB_FILE):
