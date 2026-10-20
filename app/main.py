@@ -21,7 +21,6 @@ DATA_DIR = PROJECT_ROOT / 'data'
 MODELS_DIR = PROJECT_ROOT / 'models'
 MODEL_FILE = MODELS_DIR / 'behavioral_rf_model.pkl'
 CHART_FILE = MODELS_DIR / 'behavioral_feature_importance.png'
-# This is your original training dataset
 DATASET_FILE = DATA_DIR / 'merged_training_data.csv'
 MIN_NONZERO_API_CALLS = 5
 

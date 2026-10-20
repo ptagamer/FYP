@@ -51,7 +51,7 @@ class Authenticator:
                     role TEXT NOT NULL
                 )
             ''')
-            # 2. Audit Log Table (Requirement from report)
+            # 2. Audit Log Table
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS audit_logs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
